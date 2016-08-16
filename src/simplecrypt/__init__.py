@@ -25,7 +25,7 @@ for header in HEADER:
     assert len(header) == HEADER_LEN
 
 
-def encrypt(password, data):
+def encrypt(password, data, rounds=-1):
     '''
     Encrypt some data.  Input can be bytes or a string (which will be encoded
     using UTF-8).
@@ -35,12 +35,16 @@ def encrypt(password, data):
 
     @param data: The data to be encrypted.
 
+    @param rounds: rounds of hash. Use largest if not specified.
+
     @return: The encrypted data, as bytes.
     '''
     data = _str_to_bytes(data)
     _assert_encrypt_length(data)
     salt = bytes(_random_bytes(SALT_LEN[LATEST]//8))
-    hmac_key, cipher_key = _expand_keys(password, salt, EXPANSION_COUNT[LATEST])
+    if rounds < 0:
+        rounds = EXPANSION_COUNT[LATEST]
+    hmac_key, cipher_key = _expand_keys(password, salt, rounds)
     counter = Counter.new(HALF_BLOCK, prefix=salt[:HALF_BLOCK//8])
     cipher = AES.new(cipher_key, AES.MODE_CTR, counter=counter)
     encrypted = cipher.encrypt(data)
@@ -48,7 +52,7 @@ def encrypt(password, data):
     return HEADER[LATEST] + salt + encrypted + hmac
 
 
-def decrypt(password, data):
+def decrypt(password, data, rounds=-1):
     '''
     Decrypt some data.  Input must be bytes.
 
@@ -56,6 +60,8 @@ def decrypt(password, data):
     This should be as long as varied as possible.  Try to avoid common words.
 
     @param data: The data to be decrypted, typically as bytes.
+
+    @param rounds: rounds of hash. Use the version compatible one if not specified.
 
     @return: The decrypted data, as bytes.  If the original message was a
     string you can re-create that using `result.decode('utf8')`.
@@ -66,7 +72,9 @@ def decrypt(password, data):
     _assert_decrypt_length(data, version)
     raw = data[HEADER_LEN:]
     salt = raw[:SALT_LEN[version]//8]
-    hmac_key, cipher_key = _expand_keys(password, salt, EXPANSION_COUNT[version])
+    if rounds < 0:
+        rounds = EXPANSION_COUNT[version]
+    hmac_key, cipher_key = _expand_keys(password, salt, rounds)
     hmac = raw[-HASH.digest_size:]
     hmac2 = _hmac(hmac_key, data[:-HASH.digest_size])
     _assert_hmac(hmac_key, hmac, hmac2)
